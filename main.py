@@ -5,6 +5,7 @@ import requests
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
+from freefire_api import FreeFireClient
 
 # --- DUMMY SERVER UNTUK RENDER ---
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
@@ -22,6 +23,9 @@ def run_dummy_server():
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 TOKEN = os.environ.get("BOT_TOKEN")
 
+# Inisialisasi client Free Fire (default region ID)
+ff_client = FreeFireClient(server="ID")
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text('Hai! Kirim /cek [UID] buat ngecek akun FF lo.\nContoh: /cek 17590000040')
 
@@ -34,32 +38,29 @@ async def cek_akun(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_text(f'⏳ Sedang mencari data UID {uid}...')
     
     try:
-        # Nembak API Publik (contoh pakai API gratis dari isan.eu.org)
-        url = f"https://api.isan.eu.org/nickname/ff?id={uid}"
+        # Menggunakan library freefire-api untuk ambil profil
+        profile = ff_client.get_player_profile(uid)
         
-        response = requests.get(url, timeout=15)
+        # Ekstrak data dari respons library
+        basic_info = profile.get('basicInfo', {})
+        nickname = basic_info.get('nickname', 'Unknown')
+        level = basic_info.get('level', 'N/A')
+        rank = basic_info.get('rank', 'N/A')
+        region = basic_info.get('region', 'ID')
         
-        if response.status_code == 200:
-            data = response.json()
-            
-            if data.get("status") == True or "nickname" in data:
-                # Ambil nama dari response JSON
-                nama = data.get("nickname", data.get("data", {}).get("nickname", "Unknown"))
-                
-                reply_text = (
-                    f"🎮 *INFO AKUN FREE FIRE*\n\n"
-                    f"👤 Nickname: *{nama}*\n"
-                    f"🆔 UID: `{uid}`\n\n"
-                    f"_(Data rank & wishlist menyusul)_"
-                )
-                await msg.edit_text(reply_text, parse_mode='Markdown')
-            else:
-                await msg.edit_text(f"❌ UID `{uid}` tidak ditemukan. Pastikan UID benar.")
-        else:
-            await msg.edit_text(f"❌ Gagal mengambil data. Server API error (Status: {response.status_code}).")
-            
+        reply_text = (
+            f"🎮 *INFO AKUN FREE FIRE*\n\n"
+            f"👤 Nickname: *{nickname}*\n"
+            f"🏅 Level: *{level}*\n"
+            f"🏆 Rank: *{rank}*\n"
+            f"🌍 Region: *{region}*\n"
+            f"🆔 UID: `{uid}`\n\n"
+            f"_(Data wishlist & senjata favorit menyusul)_"
+        )
+        await msg.edit_text(reply_text, parse_mode='Markdown')
+        
     except Exception as e:
-        await msg.edit_text(f"❌ Gagal mengambil data. Error: {str(e)}")
+        await msg.edit_text(f"❌ Gagal mengambil data. Pastikan UID benar.\n\nError: {str(e)}")
 
 if __name__ == '__main__':
     threading.Thread(target=run_dummy_server, daemon=True).start()
