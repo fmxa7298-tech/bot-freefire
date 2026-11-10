@@ -1,11 +1,12 @@
+import os
 import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# GANTI DENGAN TOKEN BOT LO
-TOKEN = "9164990750:AAH_A7PX4e4lz9bIyMA3BNKTyZNA85L_iMA"
+# Mengambil token dari Environment Variable (Render), BUKAN ditulis langsung di sini
+TOKEN = os.environ.get("BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text('Hai! Bot FF siap. Kirim /cek [UID] buat ngetes.')
