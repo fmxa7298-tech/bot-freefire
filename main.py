@@ -1,10 +1,11 @@
 import os
 import logging
 import threading
-import requests
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+import numexpr as ne
+import sympy as sp
 
 # --- DUMMY SERVER UNTUK RENDER ---
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
@@ -23,54 +24,71 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 TOKEN = os.environ.get("BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('Hai! Kirim /cek [UID] buat ngecek akun FF lo.\nContoh: /cek 14554842325')
+    teks = (
+        "🧮 *AI Kalkulator Aktif!*\n\n"
+        "Kirim soal matematika langsung, atau pakai command.\n"
+        "Contoh:\n"
+        "`/hitung 2 + 2 * 5`\n"
+        "`/hitung (10 ** 3) / 2`\n"
+        "`/hitung sqrt(144) + 5`\n\n"
+        "Atau lo bisa nanya persamaan pakai /persamaan (misal: `/persamaan x**2 - 4 = 0`)"
+    )
+    await update.message.reply_text(teks, parse_mode='Markdown')
 
-async def cek_akun(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def hitung(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text('Kirim UID-nya ya. Contoh: /cek 14554842325')
+        await update.message.reply_text('Kirim angkanya dong. Contoh: `/hitung 5 * 8`', parse_mode='Markdown')
         return
     
-    uid = context.args[0]
-    msg = await update.message.reply_text(f'⏳ Sedang mencari data UID {uid}...')
+    # Gabungin semua argumen jadi satu string
+    soal = " ".join(context.args)
+    msg = await update.message.reply_text('⏳ Menghitung...')
     
     try:
-        # API Gratis dari BIELVENDAs (Region ID)
-        url = f"https://free-ff-api-src-5plp.onrender.com/api/v1/account?region=ID&uid={uid}"
-        
-        response = requests.get(url, timeout=15)
-        
-        if response.status_code == 200:
-            data = response.json()
+        # 1. Coba pakai numexpr (khusus matematika dasar & cepat)
+        try:
+            hasil = ne.evaluate(soal)
+            await msg.edit_text(f"✅ *Hasil:*\n`{soal} = {hasil}`", parse_mode='Markdown')
+            return
+        except Exception:
+            pass # Kalau gagal, lanjut ke sympy
             
-            # Cek apakah data basicInfo ada
-            if "basicInfo" in data:
-                basic_info = data["basicInfo"]
-                nama = basic_info.get("nickname", "Unknown")
-                level = basic_info.get("level", "N/A")
-                rank = basic_info.get("rank", "N/A")
-                region = basic_info.get("region", "ID")
-                
-                reply_text = (
-                    f"🎮 *INFO AKUN FREE FIRE*\n\n"
-                    f"👤 Nickname: *{nama}*\n"
-                    f"🏅 Level: *{level}*\n"
-                    f"🏆 Rank: *{rank}*\n"
-                    f"🌍 Region: *{region}*\n"
-                    f"🆔 UID: `{uid}`\n"
-                )
-                await msg.edit_text(reply_text, parse_mode='Markdown')
-            else:
-                await msg.edit_text(f"❌ UID `{uid}` tidak ditemukan atau data tidak lengkap.")
-        else:
-            await msg.edit_text(f"❌ Gagal mengambil data. Server API error (Status: {response.status_code}).")
-            
+        # 2. Kalau numexpr gagal, pakai sympy (bisa handle akar, sin, cos, dll)
+        hasil_sympy = sp.sympify(soal).evalf()
+        await msg.edit_text(f"✅ *Hasil:*\n`{soal} = {hasil_sympy}`", parse_mode='Markdown')
+        
     except Exception as e:
-        await msg.edit_text(f"❌ Gagal mengambil data. Error: {str(e)}")
+        await msg.edit_text(f"❌ Waduh, formatnya salah atau nggak bisa dihitung.\nError: {str(e)}")
+
+async def persamaan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text('Contoh: `/persamaan x**2 - 4 = 0`', parse_mode='Markdown')
+        return
+
+    soal = " ".join(context.args)
+    msg = await update.message.reply_text('⏳ Mencari nilai X...')
+
+    try:
+        # Parsing persamaan pakai sympy
+        if "=" in soal:
+            kiri, kanan = soal.split("=")
+            persamaan_math = sp.Eq(sp.sympify(kiri), sp.sympify(kanan))
+        else:
+            persamaan_math = sp.sympify(soal)
+
+        # Cari solusinya
+        solusi = sp.solve(persamaan_math)
+        await msg.edit_text(f"✅ *Solusi:*\n`{soal}`\n\nX = `{solusi}`", parse_mode='Markdown')
+    except Exception as e:
+        await msg.edit_text(f"❌ Gagal menyelesaikan persamaan.\nError: {str(e)}")
 
 if __name__ == '__main__':
     threading.Thread(target=run_dummy_server, daemon=True).start()
     app = ApplicationBuilder().token(TOKEN).build()
+    
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("cek", cek_akun))
-    print("Bot berjalan...")
+    app.add_handler(CommandHandler("hitung", hitung))
+    app.add_handler(CommandHandler("persamaan", persamaan))
+    
+    print("Bot Kalkulator berjalan...")
     app.run_polling()
