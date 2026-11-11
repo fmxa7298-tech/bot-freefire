@@ -34,38 +34,33 @@ async def cek_akun(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_text(f'⏳ Sedang mencari data UID {uid}...')
     
     try:
-        # Pakai API Publik Gratis (Tanpa API Key)
-        # API ini dari komunitas Vreden (lumayan stabil buat cek profile FF)
-        url = f"https://api.vreden.my.id/api/ff?id={uid}"
+        # API Gratis dari BIELVENDAs (Region ID)
+        url = f"https://free-ff-api-src-5plp.onrender.com/api/v1/account?region=ID&uid={uid}"
         
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-        }
-        
-        response = requests.get(url, headers=headers, timeout=15)
+        response = requests.get(url, timeout=15)
         
         if response.status_code == 200:
             data = response.json()
             
-            # Cek status response dari API
-            if data.get("status") == True or data.get("result"):
-                result = data.get("result", {})
-                
-                # Ekstrak data
-                nama = result.get("nickname", "Unknown")
-                rank = result.get("rank", "Unranked")
-                level = result.get("level", "N/A")
+            # Cek apakah data basicInfo ada
+            if "basicInfo" in data:
+                basic_info = data["basicInfo"]
+                nama = basic_info.get("nickname", "Unknown")
+                level = basic_info.get("level", "N/A")
+                rank = basic_info.get("rank", "N/A")
+                region = basic_info.get("region", "ID")
                 
                 reply_text = (
                     f"🎮 *INFO AKUN FREE FIRE*\n\n"
                     f"👤 Nickname: *{nama}*\n"
                     f"🏅 Level: *{level}*\n"
                     f"🏆 Rank: *{rank}*\n"
+                    f"🌍 Region: *{region}*\n"
                     f"🆔 UID: `{uid}`\n"
                 )
                 await msg.edit_text(reply_text, parse_mode='Markdown')
             else:
-                await msg.edit_text(f"❌ UID `{uid}` tidak ditemukan atau belum pernah login.")
+                await msg.edit_text(f"❌ UID `{uid}` tidak ditemukan atau data tidak lengkap.")
         else:
             await msg.edit_text(f"❌ Gagal mengambil data. Server API error (Status: {response.status_code}).")
             
